@@ -2,6 +2,7 @@ import { Routes, Route, Navigate  } from "react-router";
 import Login from './pages/Login';
 import Dashboard from "./pages/Dashboard";
 import ToLoginPage from "./pages/ToLoginPage";
+import Signup from "./pages/Signup";
 
 function App() {
   const isLoggedIn = JSON.parse(localStorage.getItem("keepLoggedIn"))
@@ -10,6 +11,7 @@ function App() {
       <Routes>
         <Route path="/" element={ isLoggedIn ? <Navigate to={"/dashboard"} /> : <ToLoginPage />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={ <Signup /> } />
         <Route path="/dashboard" element={<Dashboard /> } />
       </Routes>
     </>
