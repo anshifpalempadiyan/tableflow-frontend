@@ -1,18 +1,24 @@
 import { Routes, Route, Navigate  } from "react-router";
 import Login from './pages/Login';
 import Dashboard from "./pages/Dashboard";
-import ToLoginPage from "./pages/ToLoginPage";
 import Signup from "./pages/Signup";
+import { useEffect } from "react";
+
 
 function App() {
   const isLoggedIn = JSON.parse(localStorage.getItem("keepLoggedIn"))
+  useEffect(() => {
+    // console.log('refresh')
+
+  },[isLoggedIn])
   return (
     <>
       <Routes>
-        <Route path="/" element={ isLoggedIn ? <Navigate to={"/dashboard"} /> : <ToLoginPage />} />
+        <Route path="/" element={ isLoggedIn ? <Navigate to={"/dashboard"} /> : <Navigate to={"/login"} />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={ <Signup /> } />
-        <Route path="/dashboard" element={<Dashboard /> } />
+        {console.log(isLoggedIn,"" )}
+        <Route path="/dashboard" element={ isLoggedIn ? <Dashboard /> : <Navigate to={"/login"} />} />
       </Routes>
     </>
   );

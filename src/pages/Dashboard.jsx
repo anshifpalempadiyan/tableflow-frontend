@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import Navbar from '../Components/Navbar.jsx'
 import { useNavigate } from 'react-router'
 
 const Dashboard = () => {
@@ -19,7 +19,7 @@ const Dashboard = () => {
   return (
     <>
         <div className="w-full h-screen flex justify-center items-start ">
-            <button onClick={() => handlelogout()}  className='p-4 bg-red-500 rounded'>Logout</button>
+            <Navbar/>
         </div>
     </>
   )
