@@ -14,6 +14,8 @@ const Navbar = () => {
             alert("User Logout successfully")
 
         } else {
+            console.log(data,"the data")
+            localStorage.clear()
             alert("User can't Logout")
         }
 

@@ -39,9 +39,10 @@ const Login = () => {
         const data = await userLogin(userData)
 
         if ( data.status ) {
-            alert( data.msg || 'Login successfull')
-            localStorage.setItem("keepLoggedIn" , JSON.stringify(true))
             navigate('/dashboard')
+            navigate(0)
+            localStorage.setItem("keepLoggedIn" , JSON.stringify(true))
+            alert( data.msg || 'Login successfull')
             console.log("to the dashboard")
         } else {
             console.log(errorMsg)
