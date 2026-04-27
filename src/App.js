@@ -8,7 +8,7 @@ import { useEffect } from "react";
 function App() {
   const isLoggedIn = JSON.parse(localStorage.getItem("keepLoggedIn"))
   useEffect(() => {
-    // console.log('refresh')
+    console.log('refresh', isLoggedIn )
 
   },[isLoggedIn])
   return (

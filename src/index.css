@@ -5,3 +5,15 @@
 body {
   font-family: "Poppins";
 }
+
+.root,
+:root,
+#docs-root {
+  /* --primary-color:oklch(0.55 0.18 250);
+  --accent-color : oklch(0.65 0.15 35); */
+  --primary-color: 62 102 218;
+  --accent-color: 212 119 109;
+  /* --primary-color : #FF0000; */
+
+ 
+}

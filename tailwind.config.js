@@ -4,7 +4,7 @@ module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
    
   theme: {
-     container: {
+    container: {
       padding: {
         DEFAULT: '1rem',
         sm: '2rem',
@@ -15,6 +15,14 @@ module.exports = {
       },
       
     },
+    extend: { 
+      colors: {
+        // "primary": "var(--primary-color)",
+        // "accent" : "var(--accent-color)",
+        primary: 'rgb(var(--primary-color) / <alpha-value>)',
+        accent: 'rgb(var(--accent-color) / <alpha-value>)',
+        
+      },},
     
   },
   plugins: [
