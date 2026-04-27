@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router'
 import { userLogin } from '../api/auth/auth'
 import { useNavigate } from 'react-router'
+import Logo from '../Components/Logo.jsx'
 
 
 const Login = () => {
@@ -55,9 +56,14 @@ const Login = () => {
 
     return (
         <>
-        <div className="min-h-screen w-full p-4 flex items-center justify-center bg-white bg-gradient-to-br from-primary/15   via-white to-accent/15">
+        <div className="min-h-screen w-full p-4  items-center justify-center flex bg-white bg-gradient-to-br from-primary/15   via-white to-accent/15">
             {/* <h1 className="text-black">kjdkfkjdkf</h1> */}
-            <div className="abosolute top-6 right-6"></div>
+            <div className="absolute top-6 left-6">
+                <Logo />
+            </div>
+            <div className="">
+
+            </div>
         </div>
             
         </>

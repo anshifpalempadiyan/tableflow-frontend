@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  font-family: "Poppins";
+  font-family: "Geist Fallback";
 }
 
 .root,
@@ -12,6 +12,7 @@ body {
   /* --primary-color:oklch(0.55 0.18 250);
   --accent-color : oklch(0.65 0.15 35); */
   --primary-color: 62 102 218;
+  --logo-color : 0 115 212;
   --accent-color: 212 119 109;
   /* --primary-color : #FF0000; */
 
