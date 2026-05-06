@@ -22,6 +22,8 @@ module.exports = {
         primary: 'rgb(var(--primary-color) / <alpha-value>)',
         accent: 'rgb(var(--accent-color) / <alpha-value>)',
         logo: 'rgb(var(--logo-color) / <alpha-value>)',
+        text: 'rgb(var(--text-second ) / <alpha-value)',
+        
         
       },},
     

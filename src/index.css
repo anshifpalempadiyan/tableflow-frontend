@@ -14,7 +14,8 @@ body {
   --primary-color: 62 102 218;
   --logo-color : 0 115 212;
   --accent-color: 212 119 109;
-  /* --primary-color : #FF0000; */
+  --text-second : 0 0 0 0.708;
+  /* --primary-color : #FF0000; #0072D5 */
 
  
 }

@@ -9,7 +9,7 @@ const Logo = () => {
                 <Icon className='text-white  font-extrabold sm:text-lg md:text-xl lg:text-2xl ' icon="flowbite:grid-outline" />
             </div>
             <div className="">
-                <h3 className="text-black sm:text-lg md:text-xl lg:text-2xl font-semibold">TableFlow</h3>
+                <h2 className="text-black sm:text-lg md:text-xl lg:text-2xl font-semibold">TableFlow</h2>
             </div>
 
         </div>
