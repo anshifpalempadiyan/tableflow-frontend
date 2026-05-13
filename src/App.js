@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import Dashboard from "./pages/Dashboard";
 import Signup from "./pages/Signup";
 import { useEffect } from "react";
+import Welcome from "./pages/Welcome";
 
 
 function App() {
@@ -14,7 +15,7 @@ function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={ isLoggedIn ? <Navigate to={"/dashboard"} /> : <Navigate to={"/login"} />} />
+        <Route path="/" element={ isLoggedIn ? <Navigate to={"/dashboard"} /> : <Welcome  />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={ <Signup /> } />
         {console.log(isLoggedIn,"" )}
