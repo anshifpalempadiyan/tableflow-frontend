@@ -4,6 +4,9 @@ import Dashboard from "./pages/Dashboard";
 import Signup from "./pages/Signup";
 import { useEffect } from "react";
 import Welcome from "./pages/Welcome";
+import Setup from "./pages/Setup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 
 function App() {
@@ -20,6 +23,10 @@ function App() {
         <Route path="/signup" element={ <Signup /> } />
         {console.log(isLoggedIn,"" )}
         <Route path="/dashboard" element={ isLoggedIn ? <Dashboard /> : <Navigate to={"/login"} />} />
+        <Route path="/setup" element={ <Setup /> } />
+        <Route path="/forget-password" element={ <ForgotPassword /> } />
+        <Route  path="/reset-password" element={ <ResetPassword /> } />
+
       </Routes>
     </>
   );

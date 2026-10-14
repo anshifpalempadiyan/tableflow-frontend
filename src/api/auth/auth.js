@@ -13,9 +13,7 @@ export const userLogin = async ( userData ) => {
 
 export const userSignup = async ( userData ) => {
     try {
-        console.log(userData,"userdataaaa")
         const { data } = await api.post("auth/signup" , userData )
-        console.log(data,"the data")
         return data
     } catch (error) {
         console.log(error.response.data);
@@ -32,5 +30,50 @@ export const userLogout = async ( userData ) => {
         console.log(error.response.data);
         return error.response.data;
 
+    }
+}
+
+export const userOTPSending = async ( userEmailData ) => {
+
+    try {
+
+        const { data } = await api.post("auth/sending-otp" , userEmailData )
+        return data
+        
+    } catch (error) {
+        
+        console.log(error.response.data);
+        return error.response.data;
+
+    }
+}
+
+export const userOTPVerifying = async ( userData ) => {
+
+    try {
+        
+        const { data } = await api.post("auth/verify-otp" , userData )
+        return data
+
+    } catch (error) {
+
+        console.log(error.response.data);
+        return error.response.data;
+        
+    }
+}
+
+export const userResetPassword = async ( userData ) => {
+
+    try {
+        
+        const { data } = await api.post("auth/reset-password" , userData )
+        return data
+
+    } catch (error) {
+
+        console.log(error.response.data);
+        return error.response.data;
+        
     }
 }

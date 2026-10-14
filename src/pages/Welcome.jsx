@@ -1,16 +1,16 @@
 import React from 'react'
 import WelcomeNavbar from '../Components/WelcomeNavbar'
 import HeroSection from '../Components/HeroSection'
-// import { Icon } from '@iconify/react'
 import FeaturesSection from '../Components/FeaturesSection'
-// import { Link } from 'react-router-dom'
 import BenefitsSection from '../Components/BenefitsSection'
+import WelcomeFooter from '../Components/WelcomeFooter'
 
 
 
 
 const Welcome = () => {
   
+
 
   return (
     <div className='w-full h-fit  flex flex-col justify-start '>
@@ -19,6 +19,7 @@ const Welcome = () => {
         <HeroSection />
         <FeaturesSection />
         <BenefitsSection />
+        <WelcomeFooter />
       </div>
     </div>
   )

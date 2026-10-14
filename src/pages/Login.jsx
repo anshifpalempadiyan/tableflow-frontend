@@ -7,11 +7,12 @@ import { Icon } from '@iconify/react'
 
 
 const Login = () => {
-    // const [ userName , setUserName ] = useState("")
+
     const [password, setPassword] = useState("")
     const [email, setEmail] = useState("")
     const [errorMsg, setErrorMsg] = useState(null)
-    const [showPassword, setShowPassword] = useState(true)
+    const [showPassword, setShowPassword] = useState(false)
+    const [isLoading , setIsLoading ] = useState(false)
     let navigate = useNavigate()
 
 
@@ -20,10 +21,7 @@ const Login = () => {
 
     const handleLogin = async () => {
 
-        // if ( !userName.trim() ) {
-        //     setErrorMsg("Username is required")
-        //     return
-        // }'
+        
 
         if (!email.trim()) {
             setErrorMsg("Email is required")
@@ -33,22 +31,21 @@ const Login = () => {
             setErrorMsg("Password is required")
         }
 
+        setIsLoading(true)
+
         const userData = {
-            // userName : userName,
             password: password,
             email: email,
         }
 
         const data = await userLogin(userData)
-        console.log(data, "the data")
-
         if (data.status) {
             navigate('/dashboard')
             navigate(0)
             localStorage.setItem("keepLoggedIn", JSON.stringify(true))
             alert(data.msg || 'Login successfull')
-            console.log("to the dashboard")
         } else {
+            setIsLoading(false)
             console.log(errorMsg)
             setErrorMsg(data.msg)
         }
@@ -74,16 +71,16 @@ const Login = () => {
                                 <div className="h-8 w-8  p-1 absolute box-border top-[50%] left-1 transform translate-y-[-50%]">
                                     <Icon className='w-full h-full text-[#7d7b7b] ' icon="fluent:mail-16-regular" />
                                 </div>
-                                <input value={email} onChange={ (e) => { setEmail(e.target.value); setErrorMsg("") }} type="email" placeholder="your@email.com" className='w-full h-[45px] border-2 border-solid  focus:outline-none  border-[#E5E5E5] focus:border-primary box-border pl-10 text-sm text-[#000000b4] font-medium rounded-lg'  />
+                                <input value={email} onChange={ (e) => { setEmail(e.target.value); setErrorMsg("") }} type="email" placeholder="your@email.com" required className='w-full h-[45px] border-2 border-solid  focus:outline-none  border-[#E5E5E5] focus:border-primary box-border pl-10 text-sm text-[#000000b4] font-medium rounded-lg'  />
                             </div>
                         </div>
                         <div className="w-full h-fit flex flex-col gap-1">
                             <div className="w-full h-fit flex flex-row justify-between items-center">
                                 <p className="text-black capitalize text-sm font-medium ">password</p>
-                                <a href='/login' className='text-primary capitalize text-xs font-medium hover:underline '>forget password?</a>
+                                <a href='/forget-password' className='text-primary capitalize text-xs font-medium hover:underline '>forget password?</a>
                             </div>
                             <div className="w-full relative">
-                                <input value={password} onChange={ (e) => { setPassword(e.target.value); setErrorMsg("") }} type={showPassword ? 'text' : 'password'} placeholder="••••••••" className='w-full h-[45px] border-2 border-solid  focus:outline-none  border-[#E5E5E5] focus:border-primary box-border pl-2 text-sm text-[#000000b4] font-medium rounded-lg'  />
+                                <input value={password} onChange={ (e) => { setPassword(e.target.value); setErrorMsg("") }} type={showPassword ? 'text' : 'password'} placeholder="••••••••" required className='w-full h-[45px] border-2 border-solid  focus:outline-none  border-[#E5E5E5] focus:border-primary box-border pl-2 text-sm text-[#000000b4] font-medium rounded-lg'  />
                                 <Link onClick={() => { setShowPassword(!showPassword) }} className="h-7 w-7  p-1 text-[#7d7b7b] hover:text-black absolute box-border top-[50%] right-1 transform translate-y-[-50%]">
                                     <Icon className='w-full h-full  ' icon={showPassword ? "ph:eye-slash" : "lucide:eye"} />
                                 </Link>
@@ -99,8 +96,8 @@ const Login = () => {
                         </div>
                     }
                     <div className="w-full h-fit ">
-                        <button onClick={ handleLogin } className=" w-full h-fit bg-primary hover:bg-opacity-95 flex justify-center items-center py-3  rounded-lg">
-                            <span className="capitalize text-white text-sm font-medium ">sign in</span>
+                        <button onClick={ handleLogin } disabled={ isLoading } className=" w-full h-fit bg-primary hover:bg-opacity-95 flex justify-center items-center py-3 cursor-pointer rounded-lg">
+                            <span className=" text-white text-sm font-medium ">{ isLoading ? 'Verifying...' : 'Log in'}</span>
                         </button>
                     </div>
                     <div className="flex items-center w-full mt-3 mb-3">

@@ -31,6 +31,7 @@ module.exports = {
         occupied: 'rgb(var(--status-occupied) / <alpha-value>)',
         reserved: 'rgb(var(--status-reserved) / <alpha-value>)',
         disabled: 'rgb(var(--status-disabled) / <alpha-value>)',
+        captain: 'rgb(var(--captain-color) / <alpha-value>)',
         'icon-bg': 'rgb(var(--icon-bg) / <alpha-value>)',
         
         
