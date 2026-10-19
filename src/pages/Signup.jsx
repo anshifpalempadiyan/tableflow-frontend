@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { userOTPSending, userOTPVerifying, userSignup } from '../api/auth/auth'
-import { useNavigate } from 'react-router'
 import Logo from '../Components/Logo'
 import { Icon } from '@iconify/react'
 
@@ -17,7 +16,6 @@ const Signup = () => {
     const [otp, setOtp] = useState("")
     const [cooldown, setCooldown] = useState(0);
     const [isVerify, setIsVerify] = useState(false)
-    let navigate = useNavigate()
 
 
 
