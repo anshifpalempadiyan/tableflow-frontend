@@ -95,6 +95,7 @@ const Signup = () => {
             userName: userName,
             password: password,
             email: email,
+            otp : otp,
         }
 
         const userOTPData = { email, otp }
@@ -105,6 +106,7 @@ const Signup = () => {
 
             if (data.status) {
                 console.log(data, "data")
+                setIsVerify(false)
                 alert(data.msg || 'Login successfull')
                 // const token = data.accessToken
                 // localStorage.setItem("authToken", token)
@@ -112,8 +114,9 @@ const Signup = () => {
                 // navigate('/dashboard')
                 window.location.href = '/dashboard'
             } else {
-                console.log(errorMsg)
+                setIsVerify(false)
                 setErrorMsg(data.msg)
+                console.log(errorMsg)
             }
 
         } else {
