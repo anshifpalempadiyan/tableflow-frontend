@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import Logo from '../Components/Logo';
 import { Link } from 'react-router';
 import { Icon } from '@iconify/react';
+import { CreateFloor, getFloor } from '../api/floor/floor';
 
 const Setup = () => {
     const [currentStep, setCurrentStep] = useState(1)
     const [rows, setRows] = useState(4)
     const [columns, setColumns] = useState(4)
+    const [seats , setSeats] = useState(4)
     const [tableData, setTableData] = useState([])
     const [roleIsOpen, setRoleIsOpen] = useState(false)
     const [selectedRole, setSelectedRole] = useState("Captain");
@@ -14,7 +16,24 @@ const Setup = () => {
     const [popupOpen, setPopupOpen] = useState(false)
     const dropdownRef = useRef(null);
     useEffect(() => {
-        createInitialTables(rows, columns)
+
+        const fetchProfile = async () => {
+            const userLayoutData = await getFloor()
+
+            if ( userLayoutData.status ) {
+                const data = userLayoutData?.data
+                setCurrentStep(data.setupStep + 1)
+                setRows(data.rows)
+                setColumns(data.columns)
+                setTableData(data.tables)
+
+            } else {
+                createInitialTables(rows, columns)
+            }
+        }
+
+        fetchProfile()
+        
         // console.log(tables,"the table data")
         function handleClickOutside(event) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -22,13 +41,13 @@ const Setup = () => {
             }
         }
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);  
     }, [rows, columns, selectedRole])
 
 
     const handlePopupEdit = () => {
         setPopupOpen(true)
-        console.log("state worked")
+        // console.log("state worked")
     }
 
     const handleAssignedTableDisplay = () => {
@@ -50,7 +69,7 @@ const Setup = () => {
             }
         }
         setTableData(tables)
-        console.log(tables, "the table data")
+        // console.log(tables, "the table data")
         return tables;
     }
 
@@ -60,15 +79,39 @@ const Setup = () => {
             setCurrentStep(currentStep - 1)
         } else {
             setCurrentStep(1)
-            console.log("Error on Current step state")
+            // console.log("Error on Current step state")
         }
     }
-    const handleNextStep = () => {
+    const handleNextStep = async () => {
         if (!currentStep < 1 || !currentStep > 3) {
-            setCurrentStep(currentStep + 1)
+            if ( currentStep === 1 ) {
+
+                const floorData = { rows, columns, seats }
+                const floor = await CreateFloor(floorData)
+                if (floor.status) {
+                    setCurrentStep(currentStep + 1)
+                }
+
+            } else if ( currentStep === 2 ) {
+
+                const tableData = []
+
+                            setCurrentStep(currentStep + 1)
+
+                // {"tables":[
+                // {"id":"0-2","name":"Window 1","seats":2},
+                // {"id":"0-3","name":"Window 2","seats":2}]}
+            } else if ( currentStep === 3 ) {
+
+                            setCurrentStep(currentStep + 1)
+
+
+            } else {
+                setCurrentStep(1)
+            }
         } else {
             setCurrentStep(1)
-            console.log("Error on Current step state")
+            // console.log("Error on Current step state")
 
         }
     }
@@ -313,8 +356,8 @@ const Setup = () => {
 
 
                                                         return (
-                                                            <div key={`${table.row}-${table.column}`} onDoubleClick={''} onClick={() => handlePopupEdit(table.id)} tabIndex='0' 
-                                                            className="aspect-square rounded-xl cursor-pointer flex flex-col items-center justify-center transition duration-200
+                                                            <div key={`${table.row}-${table.column}`} onDoubleClick={''} onClick={() => handlePopupEdit(table.id)} tabIndex='0'
+                                                                className="aspect-square rounded-xl cursor-pointer flex flex-col items-center justify-center transition duration-200
                                                             ease-in-out bg-primary/15 text-primary border-2 focus:border-4  border-primary/60 focus:outline-none hover:scale-105  focus:ring-2 focus:ring-primary ">
                                                                 {/* {console.log(`${table.row}-${table.column},num`)} */}
                                                                 {/* {table.row * columns + table.column + 1} */}
@@ -584,7 +627,7 @@ const Setup = () => {
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm ">
                         <div className="w-96 h-fit bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 gap-5">
                             <div className="w-full h-fit flex justify-end items-center">
-                            <Icon onClick={() => setPopupOpen(!popupOpen)} className='w-5 h-5 lg:w-8 lg:h-8 cursor-pointer ' icon="charm:cross" />
+                                <Icon onClick={() => setPopupOpen(!popupOpen)} className='w-5 h-5 lg:w-8 lg:h-8 cursor-pointer ' icon="charm:cross" />
                             </div>
                         </div>
                     </div>
