@@ -2,145 +2,192 @@ import React, { useEffect, useRef, useState } from 'react'
 import Logo from '../Components/Logo';
 import { Link } from 'react-router';
 import { Icon } from '@iconify/react';
-import { CreateFloor, getFloor } from '../api/floor/floor';
+import { CreateFloor, EditFloorSize, getFloor, SaveSetupStep, saveTables } from '../api/floor/floor';
+import { useNavigate } from 'react-router';
+
 
 const Setup = () => {
     const [currentStep, setCurrentStep] = useState(1)
     const [rows, setRows] = useState(4)
     const [columns, setColumns] = useState(4)
-    const [seats , setSeats] = useState(4)
+    const [seats, setSeats] = useState(4)
     const [tableData, setTableData] = useState([])
     const [roleIsOpen, setRoleIsOpen] = useState(false)
     const [selectedRole, setSelectedRole] = useState("Captain");
     const [assignedTable, setAssignedTable] = useState(false)
-    const [popupOpen, setPopupOpen] = useState(false)
     const dropdownRef = useRef(null);
+    const navigate = useNavigate()
+
+    const [savedTables, setSavedTables] = useState([])
+    const [savedSize, setSavedSize] = useState(null)
+    const [selectedTableId, setSelectedTabledId] = useState(null)
+    const [draft, setDraft] = useState({ name: '', seats: 4, disabled: false })
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+    const clickTimer = useRef(null)
+
+
+
+    const applyLayout = (layout) => {
+        setRows(layout.rows)
+        setColumns(layout.columns)
+        setTableData(layout.tables)
+        setSavedTables(layout.tables)
+        setSavedSize({ rows: layout.rows, columns: layout.columns })
+    }
+
     useEffect(() => {
 
-        const fetchProfile = async () => {
-            const userLayoutData = await getFloor()
-
-            if ( userLayoutData.status ) {
-                const data = userLayoutData?.data
-                setCurrentStep(data.setupStep + 1)
-                setRows(data.rows)
-                setColumns(data.columns)
-                setTableData(data.tables)
-
-            } else {
-                createInitialTables(rows, columns)
+        const load = async () => {
+            const res = await getFloor()
+            if (res.status) {
+                const layout = res.data
+                if (layout.setupStep >= 3) {
+                    navigate('/dashboard')
+                    return
+                }
+                applyLayout(layout)
+                setCurrentStep(Math.max(1, layout.setupStep + 1))
             }
+            setLoading(false)
         }
 
-        fetchProfile()
-        
-        // console.log(tables,"the table data")
+        load()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    useEffect(() => {
         function handleClickOutside(event) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setRoleIsOpen(false);
+                setRoleIsOpen(false)
             }
         }
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);  
-    }, [rows, columns, selectedRole])
-
-
-    const handlePopupEdit = () => {
-        setPopupOpen(true)
-        // console.log("state worked")
-    }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
 
     const handleAssignedTableDisplay = () => {
         setAssignedTable(!assignedTable)
     }
 
-
-
-    const createInitialTables = (rows, columns) => {
-        const tables = []
-        for (let row = 0; row < rows; row++) {
-            for (let column = 0; column < columns; column++) {
-                tables.push({
-                    id: `${row}-${column}`,
-                    name: `Table${row * columns + column + 1}`,
-                    row,
-                    column,
-                })
-            }
+    const saveGrid = async () => {
+        const valid = (n) => Number.isInteger(n) && n >= 1 && n <= 20
+        if (!valid(rows) || !valid(columns)) {
+            alert('Rows and columns must be from 1 to 20')
+            return false
         }
-        setTableData(tables)
-        // console.log(tables, "the table data")
-        return tables;
+
+        if (!savedSize) {
+            const res = await CreateFloor({ rows, columns, seats })
+            if (!res.status) {
+                alert(res.msg || 'Could not create layout')
+                return false
+            }
+            applyLayout(res.data)
+            return true
+        }
+
+        if (savedSize.rows === rows && savedSize.columns === columns) return true
+
+        let res = await EditFloorSize({ rows, columns })
+        if (res.needsConfirm) {
+            const names = res.removed.map((t) => t.name).join(', ')
+            if (!window.confirm(`These tables will be deleted: ${names}. Continue?`)) return false
+            res = await EditFloorSize({ rows, columns, confirm: true })
+        }
+
+        if (!res?.status) {
+            alert(res.msg || 'Could not resize layout')
+            return false
+        }
+
+        applyLayout(res.layout)
+        res.notices?.forEach((n) => alert(n))
+        return true
+
     }
 
-    // console.log(tableData,"the table")
-    const handlePreviousStep = () => {
-        if (currentStep > 1 || currentStep <= 3) {
-            setCurrentStep(currentStep - 1)
-        } else {
-            setCurrentStep(1)
-            // console.log("Error on Current step state")
+    const buildChanges = () => {
+        const old = new Map(savedTables.map((t) => [t.id, t]))
+        const changes = []
+        for (const t of tableData) {
+            const o = old.get(t.id)
+            if (!o) continue
+            const c = { id: t.id }
+            if (t.name !== o.name) c.name = t.name
+            if (t.seats !== o.seats) c.seats = t.seats
+            if (t.disabled !== o.disabled) c.disabled = t.disabled
+            if (Object.keys(c).length > 1) changes.push(c)
+
         }
+        return changes
+    }
+
+    const saveTableChanges = async () => {
+        const changes = buildChanges()
+        if (!changes.length) return true
+        const res = await saveTables(changes)
+        if (!res.status) {
+            alert(res.msg || 'Could not save tables')
+            return false
+        }
+        applyLayout(res.layout)
+        res.notices?.forEach((n) => alert(n))
+        return true
+    }
+
+    const handlePreviousStep = async () => {
+        if (saving || currentStep <= 1) return
+        if (currentStep === 2) {
+            setSaving(true)
+            const ok = await saveTableChanges()
+            setSaving(false)
+            if (!ok) return
+        }
+        setCurrentStep(currentStep - 1)
+
     }
     const handleNextStep = async () => {
-        if (!currentStep < 1 || !currentStep > 3) {
-            if ( currentStep === 1 ) {
-
-                const floorData = { rows, columns, seats }
-                const floor = await CreateFloor(floorData)
-                if (floor.status) {
-                    setCurrentStep(currentStep + 1)
+        if (saving) return
+        setSaving(true)
+        try {
+            if (currentStep === 1) {
+                if (!(await saveGrid())) return
+                setCurrentStep(2)
+            } else if (currentStep === 2) {
+                if (enabledCount === 0) {
+                    alert('Enable at least one table first')
+                    return
                 }
-
-            } else if ( currentStep === 2 ) {
-
-                const tableData = []
-
-                            setCurrentStep(currentStep + 1)
-
-                // {"tables":[
-                // {"id":"0-2","name":"Window 1","seats":2},
-                // {"id":"0-3","name":"Window 2","seats":2}]}
-            } else if ( currentStep === 3 ) {
-
-                            setCurrentStep(currentStep + 1)
-
-
-            } else {
-                setCurrentStep(1)
+                if (!(await saveTableChanges())) return
+                const res = await SaveSetupStep(2)
+                console.log(res, "the data")
+                if (!res.status) {
+                    alert(res.msg || 'Could not save progress')
+                    return
+                }
+                setCurrentStep(3)
+            } else if (currentStep === 3) {
+                // staffing API and setup step 3 come in the next stage
             }
-        } else {
-            setCurrentStep(1)
-            // console.log("Error on Current step state")
-
+        } finally {
+            setSaving(false)
         }
-    }
-
-
-
-    const handleRows = (value) => {
-        setRows(value)
-    }
-    const handleRowsMinus = () => {
-
-        setRows(rows - 1)
-
-    }
-    const handleRowsPlus = () => {
-        setRows(rows + 1)
-
 
     }
 
-    const handleColumns = (value) => {
-        setColumns(value)
-    }
-    const handleColumnsMinus = () => {
-        setColumns(columns - 1)
-    }
-    const handleColumnsPlus = () => {
-        setColumns(columns + 1)
-    }
+    const clamp = (n) => Math.min(20, Math.max(1, n))
+
+    const handleRows = (value) => setRows(Number.isNaN(value) ? '' : clamp(value))
+    const handleRowsMinus = () => setRows(clamp((Number(rows) || 1) - 1))
+    const handleRowsPlus = () => setRows(clamp((Number(rows) || 0) + 1))
+
+    const handleColumns = (value) => setColumns(Number.isNaN(value) ? '' : clamp(value))
+    const handleColumnsMinus = () => setColumns(clamp((Number(columns) || 1) - 1))
+    const handleColumnsPlus = () => setColumns(clamp((Number(columns) || 0) + 1))
+
+    const gridRows = Number.isInteger(rows) ? rows : 0
+    const gridColumns = Number.isInteger(columns) ? columns : 0
 
 
     const options = [
@@ -178,11 +225,53 @@ const Setup = () => {
             icon: "tabler:users"
         },
     ]
+
+    const updateTable = (id, patch) =>
+        setTableData((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+
+    const enabledTables = tableData.filter((t) => !t.disabled)
+    const enabledCount = enabledTables.length
+    const disabledCount = tableData.length - enabledCount
+    const totalCapacity = enabledTables.reduce((sum, t) => sum + (t.seats || 0), 0)
+
+    const openEditor = (table) => {
+        setDraft({ name: table.name, seats: table.seats, disabled: table.disabled })
+        setSelectedTabledId(table.id)
+    }
+
+    const handleTableClick = (table) => {
+        clearTimeout(clickTimer.current)
+        clickTimer.current = setTimeout(() => openEditor(table), 250)
+    }
+
+    const handleTableDoubleClick = (table) => {
+        clearTimeout(clickTimer.current)
+        updateTable(table.id, { disabled: !table.disabled })
+    }
+
+    const applyDraft = () => {
+        const name = draft.name.trim()
+        const seatsNum = Number(draft.seats)
+        if (!name || name.length > 30) return alert('Name must be 1 to 30 characters')
+        if (!Number.isInteger(seatsNum) || seatsNum < 1 || seatsNum > 20) return alert('Seats must be a whole number from 1 to 20')
+        const taken = tableData.some((t) => t.id !== selectedTableId && t.name.toLowerCase() === name.toLocaleLowerCase())
+        if (taken) return alert('Another table already has this name')
+        updateTable(selectedTableId, { name, seats: seatsNum, disabled: draft.disabled })
+        setSelectedTabledId(null)
+    }
+
+    const selectedTable = tableData.find((t) => t.id === selectedTableId)
+
+    if (loading) {
+        return <div className="min-h-screen w-full flex items-center justify-center text-muted-foreground">Loading your floor...</div>
+    }
+
+
     return (
         <div className="min-h-screen w-full">
             <div className="h-full w-full  flex flex-row justify-start items-start ">
 
-                <aside className="md:sticky top-0 h-full md:basis-1/5 z-40 hidden md:flex flex-col bg-white/20 border-r border-white/50 shadow-[4px_0_24px_rgba(0,0,0,0.05)]">
+                <aside className="lg:sticky top-0 h-full lg:basis-1/5 z-40 hidden lg:flex flex-col bg-white/20 border-r border-white/50 shadow-[4px_0_24px_rgba(0,0,0,0.05)]">
 
                     <div className="h-16 flex items-center px-6 border-b border-white/40 mt-3">
 
@@ -209,11 +298,15 @@ const Setup = () => {
                 </aside>
 
 
-                <div className="w-full md:basis-4/5 h-fit ">
+                <div className="w-full lg:basis-4/5 h-fit ">
                     <div className="sticky z-40 top-0 w-full flex flex-row justify-start items-center">
 
                         <div className=" w-full h-[76px] border-b bg-white border-gray-200 flex flex-row justify-between items-center ">
                             <div className="flex flex-row items-center justify-start px-5 gap-2">
+
+                                <div className="lg:hidden mr-4">
+                                    <Logo />
+                                </div>
 
                                 {
                                     setUpSteps.map((step, index) => {
@@ -229,7 +322,8 @@ const Setup = () => {
 
                                                 <div className="flex flex-row  justify-start items-center gap-2 ">
                                                     <Icon className='w-3 lg:w-4 h-3 lg:h-4 ' icon={step.icon} />
-                                                    <h5 className="text-xs lg:text-base ">{step.name}</h5>
+                                                    {/* <h5 className="text-xs lg:text-base ">{step.name}</h5> */}
+                                                    <h5 className={`text-xs lg:text-base ${isActive ? 'block' : 'hidden md:block'}`}>{step.name}</h5>
                                                 </div>
 
 
@@ -274,7 +368,7 @@ const Setup = () => {
 
                                             <div className="flex flex-row justify-start items-center gap-2">
                                                 <button onClick={() => handleRowsMinus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-minus" /></label></button>
-                                                <input value={rows} onChange={(e) => handleRows(parseInt(e.target.value))} onkeypress="return event.charCode >= 48" type='number' min='0' max='20' step="1" oninput="validity.valid||(value='');" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
+                                                <input value={rows} onChange={(e) => handleRows(parseInt(e.target.value))} type='number' min='0' max='20' step="1" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
                                                 <button onClick={() => handleRowsPlus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-plus" /></label></button>
                                             </div>
 
@@ -285,33 +379,26 @@ const Setup = () => {
 
                                             <div className="flex flex-row justify-start items-center gap-2">
                                                 <button onClick={() => handleColumnsMinus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-minus" /></label></button>
-                                                <input value={columns} onChange={(e) => handleColumns(parseInt(e.target.value))} onkeypress="return event.charCode >= 48" type='number' min='0' max='20' step="1" oninput="validity.valid||(value='');" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
+                                                <input value={columns} onChange={(e) => handleColumns(parseInt(e.target.value))} type='number' min='0' max='20' step="1" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
                                                 <button onClick={() => handleColumnsPlus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-plus" /></label></button>
                                             </div>
                                         </div>
 
                                         <hr className='border-t border-gray-300 ' />
-                                        <p className="text-base text-muted-foreground">Total tables: <span className="text-base text-black">{rows * columns}</span></p>
+                                        {/* <p className="text-base text-muted-foreground">Total tables: <span className="text-base text-black">{rows * columns}</span></p> */}
+                                        <p className="text-base text-muted-foreground">Total tables: <span className="text-base text-black">{gridRows * gridColumns}</span></p>
 
 
                                     </div>
                                     <div className="w-full md:basis-1/2 h-fit flex flex-col  border border-gray-200 bg-white rounded-2xl shadow-sm px-5 py-8 gap-3">
                                         <h5 className="text-lg text-black font-bold ">Grid Dimensions</h5>
                                         <p className="text-muted-foreground text-sm">Set up your floor layout size</p>
-                                        <div className={`grid gap-1.5 p-3 `} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-                                            {
-                                                tableData.map((table, index) => {
-
-
-                                                    return (
-                                                        <div key={index} className="aspect-square rounded-md flex items-center justify-center text-xs font-medium transition-colors bg-primary/10 text-primary border border-primary/20">
-                                                            {/* {table.row * columns + table.column + 1} */}
-                                                            {index + 1}
-                                                        </div>
-                                                    )
-                                                })
-                                            }
-
+                                        <div className="grid gap-1.5 p-3" style={{ gridTemplateColumns: `repeat(${Math.max(gridColumns, 1)}, minmax(0, 1fr))` }}>
+                                            {Array.from({ length: gridRows * gridColumns }, (_, i) => (
+                                                <div key={i} className="aspect-square rounded-md flex items-center justify-center text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                                    {i + 1}
+                                                </div>
+                                            ))}
                                         </div>
 
                                     </div>
@@ -356,13 +443,16 @@ const Setup = () => {
 
 
                                                         return (
-                                                            <div key={`${table.row}-${table.column}`} onDoubleClick={''} onClick={() => handlePopupEdit(table.id)} tabIndex='0'
-                                                                className="aspect-square rounded-xl cursor-pointer flex flex-col items-center justify-center transition duration-200
-                                                            ease-in-out bg-primary/15 text-primary border-2 focus:border-4  border-primary/60 focus:outline-none hover:scale-105  focus:ring-2 focus:ring-primary ">
-                                                                {/* {console.log(`${table.row}-${table.column},num`)} */}
-                                                                {/* {table.row * columns + table.column + 1} */}
-                                                                <span className="text-xs font-bold">Table {index + 1}</span>
-                                                                <span className="text-[10px] text-black font-medium">4 Seats</span>
+                                                            <div key={table.id}
+                                                                onClick={() => handleTableClick(table)}
+                                                                onDoubleClick={() => handleTableDoubleClick(table)}
+                                                                tabIndex='0'
+                                                                className={`aspect-square rounded-xl cursor-pointer flex flex-col items-center justify-center transition duration-200
+                                                            ease-in-out border-2 focus:outline-none hover:scale-105  focus:ring-2 focus:ring-primary 
+                                                            ${table.disabled ? 'bg-gray-100 text-gray-400 border-gray-300 border-dashed' : 'bg-primary/15 text-primary border-primary/60'}`}>
+                                                                <span className="text-xs font-bold">{table.name}</span>
+                                                                <span className="text-[10px] text-black font-medium">{table.seats} Seats</span>
+                                                                {table.disabled && <span className="text-[10px]">Disabled</span>}
                                                             </div>
                                                         )
                                                     })
@@ -385,17 +475,17 @@ const Setup = () => {
 
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Enabled Tables</p>
-                                                    <p className="text-black text-sm">16</p>
+                                                    <p className="text-black text-sm">{enabledCount}</p>
 
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Disabled Tables</p>
-                                                    <p className="text-black text-sm">0</p>
+                                                    <p className="text-black text-sm">{disabledCount}</p>
 
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Total Capacity</p>
-                                                    <p className="text-black text-sm">64 Seats</p>
+                                                    <p className="text-black text-sm">{totalCapacity} Seats</p>
 
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
@@ -541,17 +631,17 @@ const Setup = () => {
 
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Enabled Tables</p>
-                                                    <p className="text-black text-sm">16</p>
+                                                    <p className="text-black text-sm">{enabledCount}</p>
 
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Disabled Tables</p>
-                                                    <p className="text-black text-sm">0</p>
+                                                    <p className="text-black text-sm">{disabledCount}</p>
 
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Total Capacity</p>
-                                                    <p className="text-black text-sm">64 Seats</p>
+                                                    <p className="text-black text-sm">{totalCapacity} Seats</p>
 
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
@@ -586,8 +676,8 @@ const Setup = () => {
                                                         return (
                                                             <div key={index} tabIndex='0' className="aspect-square rounded-xl cursor-pointer flex flex-col items-center justify-center transition duration-200 ease-in-out bg-primary/15 text-primary border-2 focus:border-4  border-primary/60 focus:outline-none hover:scale-105  focus:ring-2 focus:ring-primary ">
                                                                 {/* {table.row * columns + table.column + 1} */}
-                                                                <span className="text-xs font-bold">Table {index + 1}</span>
-                                                                <span className="text-[10px] text-black font-medium">4 Seats</span>
+                                                                <span className="text-xs font-bold">{table.name}</span>
+                                                                <span className="text-[10px] text-black font-medium">{table.seats} Seats</span>
                                                             </div>
                                                         )
                                                     })
@@ -622,13 +712,47 @@ const Setup = () => {
                 </div>
 
             </div>
+
+
             {
-                popupOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm ">
-                        <div className="w-96 h-fit bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 gap-5">
-                            <div className="w-full h-fit flex justify-end items-center">
-                                <Icon onClick={() => setPopupOpen(!popupOpen)} className='w-5 h-5 lg:w-8 lg:h-8 cursor-pointer ' icon="charm:cross" />
+                selectedTable && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                        <div className="w-96 h-fit bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 gap-4 flex flex-col">
+                            <div className="w-full h-fit flex justify-between items-center">
+                                <h5 className="text-lg text-black font-bold">Edit table</h5>
+                                <Icon onClick={() => setSelectedTabledId(null)} className="w-6 h-6 cursor-pointer" icon="charm:cross" />
                             </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-black text-sm">Name</label>
+                                <input
+                                    value={draft.name}
+                                    maxLength={30}
+                                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                                    className="px-3 w-full h-9 shadow-sm bg-white text-black rounded-lg border border-gray-200 focus:border-primary/60 focus:outline-none" />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-black text-sm">seats</label>
+                                <input
+                                    type='number' min="1" max="20"
+                                    value={draft.seats}
+                                    onChange={(e) => setDraft({ ...draft, seats: e.target.value })}
+                                    className="px-3 w-full h-9 shadow-sm bg-white text-black rounded-lg border border-gray-200 focus:border-primary/60 focus:outline-none" />
+                            </div>
+
+                            <label className="flex items-center gap-2 text-sm text-black cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!draft.disabled}
+                                    onChange={(e) => setDraft({ ...draft, disabled: !e.target.checked })}
+                                />
+                                Table enabled
+                            </label>
+
+                            <button onClick={applyDraft} className="w-full h-9 bg-primary text-white rounded-lg hover:bg-primary/85">
+                                Apply
+                            </button>
                         </div>
                     </div>
                 )

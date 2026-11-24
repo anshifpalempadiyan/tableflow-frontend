@@ -24,15 +24,16 @@ export const CreateFloor = async (floorData) => {
 export const EditFloorSize = async (floorData) => {
     try {
         const { data } = await api.patch("/floor/layout" , floorData )
+        return data
     } catch (error) {
         // console.log(error.response.data);
         return error.response?.data;
     }
 }
 
-export const saveTables = async (tableData) => {
+export const saveTables = async (tables) => {
     try {
-        const { data } = await api.patch("/floor/tables" , tableData )
+        const { data } = await api.patch("/floor/tables" , { tables } )
         return data
     } catch (error) {
         return error.response?.data
@@ -41,7 +42,8 @@ export const saveTables = async (tableData) => {
 
 export const SaveSetupStep = async (step) => {
     try {
-        const { data } = await api.patch("/floor/setup-step" , step )
+        const { data } = await api.patch("/floor/setup-step" , { step } )
+        return data 
     } catch (error) {
         // console.log(error.response.data);
         return error.response?.data;
