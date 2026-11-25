@@ -49,3 +49,12 @@ export const SaveSetupStep = async (step) => {
         return error.response?.data;
     }
 }
+
+export const SaveStaffing = async (body) => {
+    try {
+        const { data } = await api.put("/floor/staffing" , body  )
+        return data
+    } catch (error) {
+        return error.response?.data
+    }
+}

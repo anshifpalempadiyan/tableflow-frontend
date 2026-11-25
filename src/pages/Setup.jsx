@@ -2,19 +2,24 @@ import React, { useEffect, useRef, useState } from 'react'
 import Logo from '../Components/Logo';
 import { Link } from 'react-router';
 import { Icon } from '@iconify/react';
-import { CreateFloor, EditFloorSize, getFloor, SaveSetupStep, saveTables } from '../api/floor/floor';
+import { CreateFloor, EditFloorSize, getFloor, SaveSetupStep, SaveStaffing, saveTables } from '../api/floor/floor';
 import { useNavigate } from 'react-router';
+
+const makeId = () =>
+
+    window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+
 
 
 const Setup = () => {
     const [currentStep, setCurrentStep] = useState(1)
     const [rows, setRows] = useState(4)
     const [columns, setColumns] = useState(4)
-    const [seats, setSeats] = useState(4)
     const [tableData, setTableData] = useState([])
     const [roleIsOpen, setRoleIsOpen] = useState(false)
     const [selectedRole, setSelectedRole] = useState("Captain");
-    const [assignedTable, setAssignedTable] = useState(false)
     const dropdownRef = useRef(null);
     const navigate = useNavigate()
 
@@ -26,6 +31,15 @@ const Setup = () => {
     const [saving, setSaving] = useState(false)
     const clickTimer = useRef(null)
 
+    const [staff, setStaff] = useState([])
+    const [sections, setSections] = useState([])
+    const [selectedTableIds, setSelectedTableIds] = useState([])
+    const [staffName, setStaffName] = useState('')
+    const [sectionName, setSectionName] = useState('')
+    const [sectionCaptainId, setSectionCaptainId] = useState('')
+    const [expandedCaptainId, setExpandedCaptainId] = useState(null)
+    const seats = 4
+
 
 
     const applyLayout = (layout) => {
@@ -34,13 +48,16 @@ const Setup = () => {
         setTableData(layout.tables)
         setSavedTables(layout.tables)
         setSavedSize({ rows: layout.rows, columns: layout.columns })
+        setStaff(layout.staff || [])
+        setSections(layout.sections || [])
+        setSelectedTableIds([])
     }
 
     useEffect(() => {
 
         const load = async () => {
             const res = await getFloor()
-            if (res.status) {
+            if (res?.status) {
                 const layout = res.data
                 if (layout.setupStep >= 3) {
                     navigate('/dashboard')
@@ -66,10 +83,6 @@ const Setup = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
-    const handleAssignedTableDisplay = () => {
-        setAssignedTable(!assignedTable)
-    }
-
     const saveGrid = async () => {
         const valid = (n) => Number.isInteger(n) && n >= 1 && n <= 20
         if (!valid(rows) || !valid(columns)) {
@@ -79,8 +92,8 @@ const Setup = () => {
 
         if (!savedSize) {
             const res = await CreateFloor({ rows, columns, seats })
-            if (!res.status) {
-                alert(res.msg || 'Could not create layout')
+            if (!res?.status) {
+                alert(res?.msg || 'Could not create layout')
                 return false
             }
             applyLayout(res.data)
@@ -90,14 +103,14 @@ const Setup = () => {
         if (savedSize.rows === rows && savedSize.columns === columns) return true
 
         let res = await EditFloorSize({ rows, columns })
-        if (res.needsConfirm) {
+        if (res?.needsConfirm) {
             const names = res.removed.map((t) => t.name).join(', ')
             if (!window.confirm(`These tables will be deleted: ${names}. Continue?`)) return false
             res = await EditFloorSize({ rows, columns, confirm: true })
         }
 
         if (!res?.status) {
-            alert(res.msg || 'Could not resize layout')
+            alert(res?.msg || 'Could not resize layout')
             return false
         }
 
@@ -127,8 +140,8 @@ const Setup = () => {
         const changes = buildChanges()
         if (!changes.length) return true
         const res = await saveTables(changes)
-        if (!res.status) {
-            alert(res.msg || 'Could not save tables')
+        if (!res?.status) {
+            alert(res?.msg || 'Could not save tables')
             return false
         }
         applyLayout(res.layout)
@@ -138,9 +151,9 @@ const Setup = () => {
 
     const handlePreviousStep = async () => {
         if (saving || currentStep <= 1) return
-        if (currentStep === 2) {
+        if (currentStep === 2 || currentStep === 3) {
             setSaving(true)
-            const ok = await saveTableChanges()
+            const ok = currentStep === 2 ? await saveTableChanges() : await saveStaffingChanges()
             setSaving(false)
             if (!ok) return
         }
@@ -161,14 +174,19 @@ const Setup = () => {
                 }
                 if (!(await saveTableChanges())) return
                 const res = await SaveSetupStep(2)
-                console.log(res, "the data")
-                if (!res.status) {
-                    alert(res.msg || 'Could not save progress')
+                if (!res?.status) {
+                    alert(res?.msg || 'Could not save progress')
                     return
                 }
                 setCurrentStep(3)
             } else if (currentStep === 3) {
-                // staffing API and setup step 3 come in the next stage
+                if (!(await saveStaffingChanges())) return
+                const res = await SaveSetupStep(3)
+                if (!res?.status) {
+                    alert(res?.msg || 'Could not save progress')
+                    return
+                }
+                navigate('/dashboard')
             }
         } finally {
             setSaving(false)
@@ -260,7 +278,65 @@ const Setup = () => {
         setSelectedTabledId(null)
     }
 
+    const handleAddStaff = () => {
+        const name = staffName.trim()
+        if (!name || name.length > 40) return alert('Staff name must be 1 to 40 characters')
+        if (staff.length >= 100) return alert('Too many staff members')
+        setStaff((list) => [...list, { id: makeId(), name, role: selectedRole.toLocaleLowerCase() }])
+        setStaffName('')
+    }
+
+    const handleRemoveStaff = (id) => {
+        setStaff((list) => list.filter((s) => s.id !== id))
+        setSections((list) => list.map((s) => (s.captainId === id ? { ...s, captainId: null } : s)))
+    }
+
+    const toggleSelectTable = (table) => {
+        if (table.disabled || sectionByTable.has(table.id)) return
+        setSelectedTableIds((ids) => (ids.includes(table.id) ? ids.filter((i) => i !== table.id) : [...ids, table.id]))
+    }
+
+    const handleSelectAll = () => setSelectedTableIds(allSelected ? [] : selectabledIds)
+
+    const handleCreateSection = () => {
+        const name = sectionName.trim()
+        if (!name || name.length > 30) return alert('Section name must be 1 to 30 character')
+        if (sections.some((s) => s.name.toLowerCase() === name.toLowerCase())) return alert('Another section already has this name')
+        if (!selectedTableIds.length) return alert('Select at least one table')
+        if (sections.length >= 50) return alert('Too many sections')
+        setSections((list) => [...list, { id: makeId(), name, captainId: sectionCaptainId || null, tableIds: selectedTableIds }])
+        setSelectedTableIds([])
+        setSectionName('')
+        setSectionCaptainId('')
+    }
+
+    const handleRemoveSection = (id) => setSections((list) => list.filter((s) => s.id !== id))
+
+    const changeSectionCaptain = (id, captainId) =>
+        setSections((list) => list.map((s) => (s.id === id ? { ...s, captainId: captainId || null } : s)))
+
+    const saveStaffingChanges = async () => {
+        const res = await SaveStaffing({ staff, sections })
+        if (!res?.status) {
+            alert(res?.msg || 'Could not save staff and sections')
+            return false
+        }
+        applyLayout(res.layout)
+        return true
+    }
+
     const selectedTable = tableData.find((t) => t.id === selectedTableId)
+
+    const captains = staff.filter((s) => s.role === 'captain')
+    const waiters = staff.filter((s) => s.role === 'waiter')
+
+    const sectionByTable = new Map()
+    sections.forEach((s) => (s.tableIds || []).forEach((id) => sectionByTable.set(id, s)))
+
+    const tableNameById = new Map(tableData.map((t) => [t.id, t.name]))
+
+    const selectabledIds = tableData.filter((t) => !t.disabled && !sectionByTable.has(t.id)).map((t) => t.id)
+    const allSelected = selectabledIds.length > 0 && selectabledIds.every((id) => selectedTableIds.includes(id))
 
     if (loading) {
         return <div className="min-h-screen w-full flex items-center justify-center text-muted-foreground">Loading your floor...</div>
@@ -286,7 +362,7 @@ const Setup = () => {
                                 const isActive = currentStep === step.id
                                 const isCompleted = currentStep > step.id
                                 return (
-                                    <Link href="#" className={`flex items-center gap-3 px-4 py-3 rounded-lg ${isActive ? "bg-primary text-white" : "bg-white text-primary"} text-xs lg:text-base font-medium shadow-sm  border border-gray-200 transition-all`}>
+                                    <Link key={step.id} href="#" className={`flex items-center gap-3 px-4 py-3 rounded-lg ${isActive ? "bg-primary text-white" : "bg-white text-primary"} text-xs lg:text-base font-medium shadow-sm  border border-gray-200 transition-all`}>
                                         <span className={`flex h-4 w-4 lg:h-6 lg:w-6 items-center justify-center rounded-full ${isActive ? " bg-white text-primary" : isCompleted ? "bg-available text-white" : "bg-gray-200 text-primary "} text-[8px] lg:text-xs`}>{isCompleted ? <Icon className='text-white  text-xs' icon="charm:tick" /> : step.id}</span>
                                         {step.name}
                                     </Link>
@@ -368,7 +444,7 @@ const Setup = () => {
 
                                             <div className="flex flex-row justify-start items-center gap-2">
                                                 <button onClick={() => handleRowsMinus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-minus" /></label></button>
-                                                <input value={rows} onChange={(e) => handleRows(parseInt(e.target.value))} type='number' min='0' max='20' step="1" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
+                                                <input value={rows} onChange={(e) => handleRows(parseInt(e.target.value))} type='number' min='1' max='20' step="1" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
                                                 <button onClick={() => handleRowsPlus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-plus" /></label></button>
                                             </div>
 
@@ -379,13 +455,12 @@ const Setup = () => {
 
                                             <div className="flex flex-row justify-start items-center gap-2">
                                                 <button onClick={() => handleColumnsMinus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-minus" /></label></button>
-                                                <input value={columns} onChange={(e) => handleColumns(parseInt(e.target.value))} type='number' min='0' max='20' step="1" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
+                                                <input value={columns} onChange={(e) => handleColumns(parseInt(e.target.value))} type='number' min='1' max='20' step="1" className="px-3 w-20 h-9 flex justify-center items-center shadow-sm bg-white  text-black  outline-4 outline-primary rounded-lg border border-gray-300 " />
                                                 <button onClick={() => handleColumnsPlus()} className="px-2 py-2 flex justify-center items-center shadow-sm bg-white hover:bg-primary text-black hover:text-white transition duration-200 ease-in-out cursor-pointer rounded-lg border border-gray-300 "><label className="cursor-pointer "><Icon className='w-4 h-4 cursor-pointer ' icon="ic:round-plus" /></label></button>
                                             </div>
                                         </div>
 
                                         <hr className='border-t border-gray-300 ' />
-                                        {/* <p className="text-base text-muted-foreground">Total tables: <span className="text-base text-black">{rows * columns}</span></p> */}
                                         <p className="text-base text-muted-foreground">Total tables: <span className="text-base text-black">{gridRows * gridColumns}</span></p>
 
 
@@ -439,7 +514,7 @@ const Setup = () => {
 
                                             <div className={`grid gap-2.5 p-3 `} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
                                                 {
-                                                    tableData.map((table, index) => {
+                                                    tableData.map((table) => {
 
 
                                                         return (
@@ -490,7 +565,7 @@ const Setup = () => {
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Sections</p>
-                                                    <p className="text-black text-sm">0</p>
+                                                    <p className="text-black text-sm">{sections.length}</p>
 
                                                 </div>
                                             </div>
@@ -501,7 +576,7 @@ const Setup = () => {
                                             {
                                                 tips.map((tip) => {
                                                     return (
-                                                        <div className="w-full h-fit flex flex-row items-start justify-start px-2 gap-1.5">
+                                                        <div key={tip} className="w-full h-fit flex flex-row items-start justify-start px-2 gap-1.5">
                                                             <Icon className='w-3 h-3 lg:w-4 lg:h-4 text-black' icon="icon-park-outline:dot" />
                                                             <p className="text-muted-foreground text-sm font-normal">{tip}</p>
                                                         </div>
@@ -547,7 +622,12 @@ const Setup = () => {
                                             <p className="text-muted-foreground text-sm">Set up your floor layout size</p>
                                             <div className="w-full flex flex-col justify-start items-start gap-1 mt-4">
                                                 <label className="text-black text-sm">Staff Name</label>
-                                                <input type="text" placeholder='Enter name...' className="px-3 w-full h-9 flex justify-center items-center shadow-sm bg-white  text-black rounded-lg border border-gray-200 focus:border-4  focus:border-primary/60 focus:outline-none   " />
+                                                <input type="text" placeholder='Enter name...'
+                                                    value={staffName}
+                                                    maxLength={40}
+                                                    onChange={(e) => setStaffName(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleAddStaff()}
+                                                    className="px-3 w-full h-9 flex justify-center items-center shadow-sm bg-white  text-black rounded-lg border border-gray-200 focus:border-4  focus:border-primary/60 focus:outline-none   " />
 
                                             </div>
                                             <div ref={dropdownRef} className=" relative w-full flex flex-col justify-start items-start gap-1 mt-4 ">
@@ -584,7 +664,7 @@ const Setup = () => {
                                                         </div>
                                                     )
                                                 }
-                                                <button className="w-full h-9 bg-primary text-white text-base hover:bg-primary/85 rounded-lg flex flex-row justify-center items-center mt-4 gap-4 px-3 py-1">
+                                                <button onClick={handleAddStaff} className="w-full h-9 bg-primary text-white text-base hover:bg-primary/85 rounded-lg flex flex-row justify-center items-center mt-4 gap-4 px-3 py-1">
                                                     <Icon className={`w-4 h-4 lg:w-5 lg:h-5 `} icon="ic:sharp-plus" />
                                                     <span className="">Add Staff Member</span>
                                                 </button>
@@ -592,28 +672,51 @@ const Setup = () => {
                                                 <hr className='border-b border  border-[#E5E5E5] mt-4 w-full' />
 
                                                 <div className="w-full h-fit flex flex-col items-start justify-start mt-4">
-                                                    <div className="w-full flex flex-col justify-start items-start gap-3 ">
-                                                        <p className="text-muted-foreground text-sm ">Captains</p>
-                                                        <div className="w-full h-fit flex flex-col items-start justify-start gap-1">
-                                                            <div onClick={() => handleAssignedTableDisplay()} className="w-full h-fit flex flex-row justify-between items-center bg-[#F5F5F5] cursor-pointer rounded-lg py-2 gap-2 px-4">
-                                                                <div className="w-full h-fit flex flex-row justify-start items-center gap-2 ">
-                                                                    <Icon className={`w-3 h-3 lg:w-4 lg:h-4 text-captain`} icon="lucide:crown" />
-                                                                    <p className="text-black text-sm ">Anshif</p>
-                                                                </div>
-                                                                <Icon className='w-3 h-3 lg:w-4 lg:h-4 text-muted-foreground cursor-pointer' icon="ep:arrow-down" />
-                                                            </div>
 
-                                                            {
-                                                                assignedTable && (
-                                                                    <div className="w-full h-fit flex flex-row justify-start items-center bg-[#F5F5F5] rounded-lg py-2  px-4">
-                                                                        <p className="text-muted-foreground text-sm">Tables: </p>
-                                                                        <span className="text-black text-sm ">T1,T2,T3</span>
-
+                                                    <div className="w-full flex flex-col justify-start items-start gap-3">
+                                                        <p className="text-muted-foreground text-sm">Captains</p>
+                                                        {captains.length === 0 && <p className='text-muted-foreground text-xs'>No captains yet</p>}
+                                                        {captains.map((c) => {
+                                                            const mySections = sections.filter((s) => s.captainId === c.id)
+                                                            const isOpen = expandedCaptainId === c.id
+                                                            return (
+                                                                <div key={c.id} className="w-full h-fit flex flex-col items-start justify-start gap-1">
+                                                                    <div onClick={() => setExpandedCaptainId(isOpen ? null : c.id)} className="w-full h-fit flex flex-row justify-between items-center bg-[#F5F5F5] cursor-pointer rounded-lg py-2 gap-2 px-4">
+                                                                        <div className="w-full h-fit flex flex-row justify-start items-center gap-2">
+                                                                            <Icon className='w-3 h-3 lg:w-4 lg:h-4 text-captain' icon="lucide:crown" />
+                                                                            <p className="text-black text-sm">{c.name}</p>
+                                                                        </div>
+                                                                        <div className="flex flex-row items-center gap-2">
+                                                                            <Icon onClick={(e) => { e.stopPropagation(); handleRemoveStaff(c.id) }} className="w-4 h-4 text-muted-foreground cursor-pointer" icon="charm:cross" />
+                                                                            <Icon className="w-3 h-3 lg:w-4 lg:h-4 text-muted-foreground" icon="ep:arrow-down" />
+                                                                        </div>
                                                                     </div>
-                                                                )
-                                                            }
 
-                                                        </div>
+                                                                    {
+                                                                        isOpen && (
+                                                                            <div className="w-full h-fit flex flex-row justify-start items-center bg-[#F5F5F5] rounded-lg py-2 px-4 gap-1">
+                                                                                <p className="text-muted-foreground text-sm">Sections: </p>
+                                                                                <span className="text-black text-sm">{mySections.length ? mySections.map((s) => s.name).join(', ') : 'None'}</span>
+                                                                            </div>
+                                                                        )
+                                                                    }
+                                                                </div>
+                                                            )
+                                                        })}
+
+                                                        <p className="text-muted-foreground text-sm mt-2">Waiters</p>
+                                                        {waiters.length === 0 && <p className='text-muted-foreground text-xs '>No waiters yet</p>}
+                                                        {
+                                                            waiters.map((w) => (
+                                                                <div key={w.id} className="w-full h-fit flex flex-row justify-between items-center bg-[#F5F5F5] rounded-lg py-2 px-4">
+                                                                    <div className="flex flex-row items-center gap-2">
+                                                                        <Icon className="w-3 h-3 lg:w-4 lg:h-4 text-muted-foreground" icon="lucide:user" />
+                                                                        <p className="text-black text-sm">{w.name}</p>
+                                                                    </div>
+                                                                    <Icon onClick={() => handleRemoveStaff(w.id)} className="w-4 h-4 text-muted-foreground cursor-pointer" icon="charm:cross" />
+                                                                </div>
+                                                            ))
+                                                        }
                                                     </div>
                                                 </div>
 
@@ -646,7 +749,7 @@ const Setup = () => {
                                                 </div>
                                                 <div className="flex flex-row w-full h-fit justify-between items-center">
                                                     <p className="text-muted-foreground text-sm">Sections</p>
-                                                    <p className="text-black text-sm">0</p>
+                                                    <p className="text-black text-sm">{sections.length}</p>
 
                                                 </div>
                                             </div>
@@ -663,26 +766,96 @@ const Setup = () => {
                                                     <p className="text-muted-foreground text-sm">Click tables to select, and assign the table to each members</p>
                                                 </div>
                                                 <div className="flex flex-row justify-start items-center gap-1">
-                                                    <input name="" type="checkbox" className=" cursor-pointer w-3.5 h-3.5 border border-gray-400 rounded-sm" />
+                                                    <input name="" type="checkbox" checked={allSelected} onChange={handleSelectAll} className=" cursor-pointer w-3.5 h-3.5 border border-gray-400 rounded-sm" />
                                                     <label className="text-black text-sm">Select All</label>
                                                 </div>
                                             </div>
 
                                             <div className={`grid gap-2.5 p-3 `} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
                                                 {
-                                                    tableData.map((table, index) => {
-
+                                                    tableData.map((table) => {
+                                                        const section = sectionByTable.get(table.id)
+                                                        const isSelected = selectedTableIds.includes(table.id)
 
                                                         return (
-                                                            <div key={index} tabIndex='0' className="aspect-square rounded-xl cursor-pointer flex flex-col items-center justify-center transition duration-200 ease-in-out bg-primary/15 text-primary border-2 focus:border-4  border-primary/60 focus:outline-none hover:scale-105  focus:ring-2 focus:ring-primary ">
-                                                                {/* {table.row * columns + table.column + 1} */}
+                                                            <div
+                                                                key={table.id}
+                                                                onClick={() => toggleSelectTable(table)}
+                                                                className={`aspect-square rounded-xl flex flex-col items-center justify-center transition duration-200 ease-in-out border-2 ${table.disabled
+                                                                        ? 'bg-gray-100 text-gray-400 border-gray-300 border-dashed cursor-not-allowed'
+                                                                        : section
+                                                                            ? 'bg-amber-100 text-amber-800 border-amber-400 cursor-not-allowed'
+                                                                            : isSelected
+                                                                                ? 'bg-primary text-white border-primary cursor-pointer'
+                                                                                : 'bg-primary/15 text-primary border-primary/60 cursor-pointer hover:scale-105'
+                                                                    }`}>
+
                                                                 <span className="text-xs font-bold">{table.name}</span>
-                                                                <span className="text-[10px] text-black font-medium">{table.seats} Seats</span>
+                                                                <span className="text-[10px] font-medium">{table.seats} Seats</span>
+                                                                {section && <span className='text-[10px]'>{section.name}</span>}
+                                                                {table.disabled && <span className='text-[10px]'>Disabled</span>}
+
                                                             </div>
                                                         )
                                                     })
                                                 }
 
+                                            </div>
+
+                                            <div className="w-full flex flex-col md:flex-row md:items-end gap-3 px-3">
+                                                <div className="flex flex-col gap-1 w-full md:basis-1/3">
+                                                    <label className="text-black text-sm">Section name</label>
+                                                    <input
+                                                        value={sectionName}
+                                                        maxLength={30}
+                                                        placeholder='e.g. Family'
+                                                        onChange={(e) => setSectionName(e.target.value)}
+                                                        className="px-3 w-full h-9 shadow-sm bg-white text-black rounded-lg border border-gray-200 focus:border-primary/60 focus:outline-none" />
+                                                </div>
+
+                                                <div className="flex flex-col gap-1 w-full md:basis-1/3">
+                                                    <label className="text-black text-sm">Captain (optional)</label>
+                                                    <select
+                                                        value={sectionCaptainId}
+                                                        onChange={(e) => setSectionCaptainId(e.target.value)}
+                                                        className="px-2 s-full h-9 shadow-sm bg-white text-black rounded-lg border border-gray-200 focus:outline-none focus:border-primary/60">
+                                                        <option value="">No captain</option>
+                                                        {captains.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                    </select>
+                                                </div>
+
+                                                <button onClick={handleCreateSection} className="w-full md:basis-1/3 h-9 bg-primary text-white test-sm rounded-lg hover:bg-primary/85">
+                                                    Create section ({selectedTableIds.length} selected)
+                                                </button>
+
+                                                {
+                                                    sections.length > 0 && (
+                                                        <div className="w-full flex flex-col gap-2 px-3">
+                                                            <p className="text-muted-foreground text-sm">Sections</p>
+                                                            {
+                                                                sections.map((s) => (
+                                                                    <div key={s.id} className="w-full flex flex-row flex-wrap items-center justify-between gap-2 bg-[#F5F5F5] rounded-lg py-2 px-4">
+                                                                        <div className="flex flex-col">
+                                                                            <p className="text-black text-sm font-semibold">{s.name}</p>
+                                                                            <p className="text-muted foreground text-xs">{s.tableIds.map((id) => tableNameById.get(id) || id).join(', ')}</p>
+                                                                        </div>
+
+                                                                        <div className="flex flex-row items-center gap-2">
+                                                                            <select
+                                                                                value={s.captainId || ''}
+                                                                                onChange={(e) => changeSectionCaptain(s.id, e.target.value)}
+                                                                                className="px-2 h-8 bg-white text-black text-sm rounded-lg border border-gray-200 focus:outline-none">
+                                                                                <option value="">No captain</option>
+                                                                                {captains.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                                            </select>
+                                                                            <Icon onClick={() => handleRemoveSection(s.id)} className='w-5 h-5 cursor-pointer text-muted-foreground ' icon="charm:cross" />
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                            }
+                                                        </div>
+                                                    )
+                                                }
                                             </div>
 
                                         </div>
